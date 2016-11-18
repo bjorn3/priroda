@@ -49,6 +49,7 @@ use hyper::uri::RequestUri;
 enum Page {
     Html(Box<RenderBox + Send>),
     Ico,
+    Json(String),
 }
 
 use Page::*;
@@ -133,7 +134,11 @@ fn act<'a, 'tcx: 'a>(mut ecx: EvalContext<'a, 'tcx>, session: &Session, tcx: TyC
                         use hyper::mime::{Mime, TopLevel, SubLevel};
                         res.headers_mut().set(ContentType(Mime(TopLevel::Image, SubLevel::Ext("x-icon".to_string()), vec![])));
                         res.send(ico).unwrap()
-                    }
+                    },
+                    Some(Json(text)) => {
+                        res.headers_mut().set(ContentType::json());
+                        res.send(text.as_bytes()).unwrap();
+                    },
                     None => res.send(b"unable to process").unwrap(),
                 }
             }
@@ -212,6 +217,7 @@ fn act<'a, 'tcx: 'a>(mut ecx: EvalContext<'a, 'tcx>, session: &Session, tcx: TyC
                 // display current frame
                 None => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, String::new()),
             },
+            Some("frames") => promise.set(Json(r###"[{function: "foo"}, {function: "bar"}]"###.to_owned())),
             Some(cmd) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("unknown command: {}", cmd)),
         }
     }

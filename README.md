@@ -18,6 +18,14 @@ the browser of your choice.
 browser. UI is changing rapidly right now, so you need to figure out how to use
 it by yourself (or by asking on irc) for now.
 
+## Contributing to the UI
+
+The UI is generated from [`elm`](elm-lang.org) code. So if you want to modify
+the UI, you need to install `npm` and then `npm install elm`. After that, just
+run `elm-make main.elm --warn`. Although that is a generated
+file, we commit it to the repository and crates.io, so users of priroda don't
+need to know about `elm` or `npm`.
+
 ## Contributing and getting help
 
 Check out the issues on this GitHub repository for some ideas. There's lots that
