@@ -13,6 +13,7 @@ log_settings = "0.1.1"
 hyper = "0.9.7"
 open = "1.1.1"
 promising-future = "0.2"
-horrorshow = "0.5.6"
-cgraph = { git = "https://github.com/oli-obk/cgraph.git" }
-miri = { git = "https://github.com/solson/miri.git" }
+miri = { path = "../miri" }
+serde = "0.8"
+serde_derive = "0.8.18"
+serde_json = "0.8"

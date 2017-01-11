@@ -8724,6 +8724,7 @@ var _elm_lang$http$Http$StringPart = F2(
 		return {ctor: 'StringPart', _0: a, _1: b};
 	});
 var _elm_lang$http$Http$stringPart = _elm_lang$http$Http$StringPart;
+var _oli_obk$priroda$Main$base_url = 'http://localhost:54321/';
 var _oli_obk$priroda$Main$subscriptions = function (model) {
 	return _elm_lang$core$Platform_Sub$none;
 };
@@ -8747,22 +8748,6 @@ var _oli_obk$priroda$Main$trTd = function (s) {
 var _oli_obk$priroda$Main$printFrame = function (frame) {
 	return _oli_obk$priroda$Main$trTd(frame.$function);
 };
-var _oli_obk$priroda$Main$printError = function (error) {
-	var _p0 = error;
-	switch (_p0.ctor) {
-		case 'BadUrl':
-			return _oli_obk$priroda$Main$trTd(
-				A2(_elm_lang$core$Basics_ops['++'], 'bad url: ', _p0._0));
-		case 'Timeout':
-			return _oli_obk$priroda$Main$trTd('timeout');
-		case 'NetworkError':
-			return _oli_obk$priroda$Main$trTd('network error');
-		case 'BadStatus':
-			return _oli_obk$priroda$Main$trTd('bad status');
-		default:
-			return _oli_obk$priroda$Main$trTd('bad payload');
-	}
-};
 var _oli_obk$priroda$Main$Frame = function (a) {
 	return {$function: a};
 };
@@ -8774,18 +8759,18 @@ var _oli_obk$priroda$Main$frameDecoder = A3(
 var _oli_obk$priroda$Main$decodeFramesJson = _elm_lang$core$Json_Decode$list(_oli_obk$priroda$Main$frameDecoder);
 var _oli_obk$priroda$Main$Model = F2(
 	function (a, b) {
-		return {frames: a, errors: b};
+		return {frames: a, log: b};
 	});
 var _oli_obk$priroda$Main$Frames = function (a) {
 	return {ctor: 'Frames', _0: a};
 };
-var _oli_obk$priroda$Main$getFrames = function () {
-	var url = 'http://localhost:54321/frames';
-	return A2(
-		_elm_lang$http$Http$send,
-		_oli_obk$priroda$Main$Frames,
-		A2(_elm_lang$http$Http$get, url, _oli_obk$priroda$Main$decodeFramesJson));
-}();
+var _oli_obk$priroda$Main$getFrames = A2(
+	_elm_lang$http$Http$send,
+	_oli_obk$priroda$Main$Frames,
+	A2(
+		_elm_lang$http$Http$get,
+		A2(_elm_lang$core$Basics_ops['++'], _oli_obk$priroda$Main$base_url, 'frames'),
+		_oli_obk$priroda$Main$decodeFramesJson));
 var _oli_obk$priroda$Main$init = {
 	ctor: '_Tuple2',
 	_0: A2(
@@ -8794,41 +8779,17 @@ var _oli_obk$priroda$Main$init = {
 		{ctor: '[]'}),
 	_1: _oli_obk$priroda$Main$getFrames
 };
-var _oli_obk$priroda$Main$update = F2(
-	function (msg, model) {
-		var _p1 = msg;
-		if (_p1.ctor === 'MorePlease') {
-			return {ctor: '_Tuple2', _0: model, _1: _oli_obk$priroda$Main$getFrames};
-		} else {
-			if (_p1._0.ctor === 'Ok') {
-				return {
-					ctor: '_Tuple2',
-					_0: _elm_lang$core$Native_Utils.update(
-						model,
-						{frames: _p1._0._0}),
-					_1: _elm_lang$core$Platform_Cmd$none
-				};
-			} else {
-				return {
-					ctor: '_Tuple2',
-					_0: _elm_lang$core$Native_Utils.update(
-						model,
-						{
-							errors: A2(
-								_elm_lang$core$List$append,
-								model.errors,
-								{
-									ctor: '::',
-									_0: _p1._0._0,
-									_1: {ctor: '[]'}
-								})
-						}),
-					_1: _elm_lang$core$Platform_Cmd$none
-				};
-			}
-		}
-	});
-var _oli_obk$priroda$Main$MorePlease = {ctor: 'MorePlease'};
+var _oli_obk$priroda$Main$CommandFinished = function (a) {
+	return {ctor: 'CommandFinished', _0: a};
+};
+var _oli_obk$priroda$Main$Command = function (a) {
+	return {ctor: 'Command', _0: a};
+};
+var _oli_obk$priroda$Main$ReloadFrames = {ctor: 'ReloadFrames'};
+var _oli_obk$priroda$Main$Next = {ctor: 'Next'};
+var _oli_obk$priroda$Main$Return = {ctor: 'Return'};
+var _oli_obk$priroda$Main$Step = {ctor: 'Step'};
+var _oli_obk$priroda$Main$Continue = {ctor: 'Continue'};
 var _oli_obk$priroda$Main$view = function (model) {
 	return A2(
 		_elm_lang$html$Html$div,
@@ -8836,41 +8797,269 @@ var _oli_obk$priroda$Main$view = function (model) {
 		{
 			ctor: '::',
 			_0: A2(
-				_elm_lang$html$Html$table,
-				{ctor: '[]'},
-				A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$printFrame, model.frames)),
+				_elm_lang$html$Html$button,
+				{
+					ctor: '::',
+					_0: _elm_lang$html$Html_Events$onClick(_oli_obk$priroda$Main$ReloadFrames),
+					_1: {ctor: '[]'}
+				},
+				{
+					ctor: '::',
+					_0: _elm_lang$html$Html$text('Reload Stackframes'),
+					_1: {ctor: '[]'}
+				}),
 			_1: {
 				ctor: '::',
 				_0: A2(
 					_elm_lang$html$Html$button,
 					{
 						ctor: '::',
-						_0: _elm_lang$html$Html_Events$onClick(_oli_obk$priroda$Main$MorePlease),
+						_0: _elm_lang$html$Html_Events$onClick(
+							_oli_obk$priroda$Main$Command(_oli_obk$priroda$Main$Step)),
 						_1: {ctor: '[]'}
 					},
 					{
 						ctor: '::',
-						_0: _elm_lang$html$Html$text('More Please!'),
+						_0: _elm_lang$html$Html$text('Step'),
 						_1: {ctor: '[]'}
 					}),
 				_1: {
 					ctor: '::',
 					_0: A2(
-						_elm_lang$html$Html$br,
-						{ctor: '[]'},
-						{ctor: '[]'}),
+						_elm_lang$html$Html$button,
+						{
+							ctor: '::',
+							_0: _elm_lang$html$Html_Events$onClick(
+								_oli_obk$priroda$Main$Command(_oli_obk$priroda$Main$Next)),
+							_1: {ctor: '[]'}
+						},
+						{
+							ctor: '::',
+							_0: _elm_lang$html$Html$text('Next'),
+							_1: {ctor: '[]'}
+						}),
 					_1: {
 						ctor: '::',
 						_0: A2(
-							_elm_lang$html$Html$table,
-							{ctor: '[]'},
-							A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$printError, model.errors)),
-						_1: {ctor: '[]'}
+							_elm_lang$html$Html$button,
+							{
+								ctor: '::',
+								_0: _elm_lang$html$Html_Events$onClick(
+									_oli_obk$priroda$Main$Command(_oli_obk$priroda$Main$Continue)),
+								_1: {ctor: '[]'}
+							},
+							{
+								ctor: '::',
+								_0: _elm_lang$html$Html$text('Continue'),
+								_1: {ctor: '[]'}
+							}),
+						_1: {
+							ctor: '::',
+							_0: A2(
+								_elm_lang$html$Html$button,
+								{
+									ctor: '::',
+									_0: _elm_lang$html$Html_Events$onClick(
+										_oli_obk$priroda$Main$Command(_oli_obk$priroda$Main$Return)),
+									_1: {ctor: '[]'}
+								},
+								{
+									ctor: '::',
+									_0: _elm_lang$html$Html$text('Return'),
+									_1: {ctor: '[]'}
+								}),
+							_1: {
+								ctor: '::',
+								_0: A2(
+									_elm_lang$html$Html$h1,
+									{ctor: '[]'},
+									{
+										ctor: '::',
+										_0: _elm_lang$html$Html$text('Stackframes'),
+										_1: {ctor: '[]'}
+									}),
+								_1: {
+									ctor: '::',
+									_0: A2(
+										_elm_lang$html$Html$table,
+										{ctor: '[]'},
+										A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$printFrame, model.frames)),
+									_1: {
+										ctor: '::',
+										_0: A2(
+											_elm_lang$html$Html$h1,
+											{ctor: '[]'},
+											{
+												ctor: '::',
+												_0: _elm_lang$html$Html$text('Logs'),
+												_1: {ctor: '[]'}
+											}),
+										_1: {
+											ctor: '::',
+											_0: A2(
+												_elm_lang$html$Html$table,
+												{ctor: '[]'},
+												A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$trTd, model.log)),
+											_1: {ctor: '[]'}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
 		});
 };
+var _oli_obk$priroda$Main$Error = function (a) {
+	return {ctor: 'Error', _0: a};
+};
+var _oli_obk$priroda$Main$InterpretationFinished = {ctor: 'InterpretationFinished'};
+var _oli_obk$priroda$Main$Success = {ctor: 'Success'};
+var _oli_obk$priroda$Main$decodeSuccess = A2(
+	_elm_lang$core$Json_Decode$andThen,
+	function (v) {
+		return v ? _elm_lang$core$Json_Decode$succeed(_oli_obk$priroda$Main$Success) : _elm_lang$core$Json_Decode$succeed(_oli_obk$priroda$Main$InterpretationFinished);
+	},
+	_elm_lang$core$Json_Decode$bool);
+var _oli_obk$priroda$Main$cmdResultDecoder = _elm_lang$core$Json_Decode$oneOf(
+	{
+		ctor: '::',
+		_0: _oli_obk$priroda$Main$decodeSuccess,
+		_1: {
+			ctor: '::',
+			_0: A2(
+				_elm_lang$core$Json_Decode$andThen,
+				function (v) {
+					return _elm_lang$core$Json_Decode$succeed(
+						_oli_obk$priroda$Main$Error(v));
+				},
+				_elm_lang$core$Json_Decode$string),
+			_1: {ctor: '[]'}
+		}
+	});
+var _oli_obk$priroda$Main$debuggerCommand = function (cmd) {
+	return A2(
+		_elm_lang$http$Http$send,
+		_oli_obk$priroda$Main$CommandFinished,
+		A2(
+			_elm_lang$http$Http$get,
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				_oli_obk$priroda$Main$base_url,
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					'cmd/',
+					_elm_lang$core$String$toLower(
+						_elm_lang$core$Basics$toString(cmd)))),
+			_oli_obk$priroda$Main$cmdResultDecoder));
+};
+var _oli_obk$priroda$Main$update = F2(
+	function (msg, model) {
+		var _p0 = msg;
+		switch (_p0.ctor) {
+			case 'ReloadFrames':
+				return {ctor: '_Tuple2', _0: model, _1: _oli_obk$priroda$Main$getFrames};
+			case 'Command':
+				return {
+					ctor: '_Tuple2',
+					_0: model,
+					_1: _oli_obk$priroda$Main$debuggerCommand(_p0._0)
+				};
+			case 'CommandFinished':
+				if (_p0._0.ctor === 'Ok') {
+					switch (_p0._0._0.ctor) {
+						case 'Success':
+							return {ctor: '_Tuple2', _0: model, _1: _oli_obk$priroda$Main$getFrames};
+						case 'InterpretationFinished':
+							return {
+								ctor: '_Tuple2',
+								_0: _elm_lang$core$Native_Utils.update(
+									model,
+									{
+										log: A2(
+											_elm_lang$core$List$append,
+											model.log,
+											{
+												ctor: '::',
+												_0: 'interpretation finished',
+												_1: {ctor: '[]'}
+											}),
+										frames: {ctor: '[]'}
+									}),
+								_1: _elm_lang$core$Platform_Cmd$none
+							};
+						default:
+							return {
+								ctor: '_Tuple2',
+								_0: _elm_lang$core$Native_Utils.update(
+									model,
+									{
+										log: A2(
+											_elm_lang$core$List$append,
+											model.log,
+											{
+												ctor: '::',
+												_0: _p0._0._0._0,
+												_1: {ctor: '[]'}
+											})
+									}),
+								_1: _elm_lang$core$Platform_Cmd$none
+							};
+					}
+				} else {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{
+								log: A2(
+									_elm_lang$core$List$append,
+									model.log,
+									{
+										ctor: '::',
+										_0: A2(
+											_elm_lang$core$Basics_ops['++'],
+											'network error: ',
+											_elm_lang$core$Basics$toString(_p0._0._0)),
+										_1: {ctor: '[]'}
+									})
+							}),
+						_1: _elm_lang$core$Platform_Cmd$none
+					};
+				}
+			default:
+				if (_p0._0.ctor === 'Ok') {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{frames: _p0._0._0}),
+						_1: _elm_lang$core$Platform_Cmd$none
+					};
+				} else {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{
+								log: A2(
+									_elm_lang$core$List$append,
+									model.log,
+									{
+										ctor: '::',
+										_0: A2(
+											_elm_lang$core$Basics_ops['++'],
+											'network error: ',
+											_elm_lang$core$Basics$toString(_p0._0._0)),
+										_1: {ctor: '[]'}
+									})
+							}),
+						_1: _elm_lang$core$Platform_Cmd$none
+					};
+				}
+		}
+	});
 var _oli_obk$priroda$Main$main = _elm_lang$html$Html$program(
 	{init: _oli_obk$priroda$Main$init, view: _oli_obk$priroda$Main$view, update: _oli_obk$priroda$Main$update, subscriptions: _oli_obk$priroda$Main$subscriptions})();
 var Elm = {};

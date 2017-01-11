@@ -1,7 +1,11 @@
 #![feature(rustc_private, custom_attribute)]
 #![feature(pub_restricted)]
 #![allow(unused_attributes)]
-#![recursion_limit = "5000"]
+#![feature(proc_macro)]
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 
 extern crate getopts;
 extern crate miri;
@@ -9,7 +13,6 @@ extern crate rustc;
 extern crate rustc_driver;
 extern crate rustc_trans;
 extern crate rustc_data_structures;
-extern crate graphviz as dot;
 extern crate env_logger;
 extern crate log_settings;
 #[macro_use]
@@ -18,16 +21,7 @@ extern crate syntax;
 extern crate hyper;
 extern crate open;
 extern crate promising_future;
-#[macro_use]
-extern crate horrorshow;
-extern crate cgraph;
 
-mod graphviz;
-mod commands;
-
-use commands::Renderer;
-
-use horrorshow::prelude::*;
 use promising_future::future_promise;
 
 use miri::{
@@ -47,7 +41,7 @@ use hyper::header::{TransferEncoding, Encoding, ContentType};
 use hyper::uri::RequestUri;
 
 enum Page {
-    Html(Box<RenderBox + Send>),
+    Elm,
     Ico,
     Json(String),
 }
@@ -117,17 +111,17 @@ fn act<'a, 'tcx: 'a>(mut ecx: EvalContext<'a, 'tcx>, session: &Session, tcx: TyC
                 println!("got `{}`", path);
                 sender.lock().unwrap().send((path, promise)).unwrap();
                 match future.value() {
-                    Some(Html(output)) => {
+                    Some(Elm) => {
                         res.headers_mut().set(
                             TransferEncoding(vec![
                                 Encoding::Gzip,
-                                Encoding::Chunked,
                             ])
                         );
                         res.headers_mut().set(ContentType::html());
-                        // hack, because `Box<RenderBox+Send>` isn't the same as `Box<RenderBox>`
-                        let output: Box<RenderBox> = output;
-                        output.write_to_io(&mut res.start().unwrap()).unwrap();
+                        //let elm = include_bytes!("../index.html");
+                        use std::io::Read;
+                        let elm: Result<Vec<u8>, _> = std::fs::File::open("index.html").unwrap().bytes().collect();
+                        res.send(&elm.unwrap()).unwrap();
                     }
                     Some(Ico) => {
                         let ico = include_bytes!("../favicon.ico");
@@ -151,79 +145,145 @@ fn act<'a, 'tcx: 'a>(mut ecx: EvalContext<'a, 'tcx>, session: &Session, tcx: TyC
         assert_eq!(&path[..1], "/");
         let mut matches = path[1..].split('/');
         match matches.next() {
-            Some("") | None => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, String::new()),
-            Some("step") => match ecx.step() {
-                Ok(true) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, String::new()),
-                Ok(false) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, "interpretation finished".to_string()),
-                Err(e) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("{:?}", e)),
-            },
-            Some("next") => {
-                let frame = ecx.stack().len();
-                let stmt = ecx.stack().last().unwrap().stmt;
-                let block = ecx.stack().last().unwrap().block;
-                loop {
-                    match ecx.step() {
-                        Ok(true) => if ecx.stack().len() == frame && (block < ecx.stack().last().unwrap().block || stmt < ecx.stack().last().unwrap().stmt) {
-                            Renderer::new(promise, &ecx, tcx, session).render_main_window(None, String::new());
-                        } else {
-                            continue;
-                        },
-                        Ok(false) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, "interpretation finished".to_string()),
-                        Err(e) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("{:?}", e)),
-                    }
-                    break;
-                }
-            },
+            Some("") | None => promise.set(Elm),
+            Some("cmd") => process_cmd(&mut ecx, matches, promise),
             Some("favicon.ico") => promise.set(Ico),
-            Some("return") => {
-                let frame = ecx.stack().len();
-                fn is_ret(ecx: &EvalContext) -> bool {
-                    let stack = ecx.stack().last().unwrap();
-                    let basic_block = &stack.mir.basic_blocks()[stack.block];
-
-                    match basic_block.terminator().kind {
-                        rustc::mir::TerminatorKind::Return => stack.stmt >= basic_block.statements.len(),
-                        _ => false,
-                    }
-                }
-                loop {
-                    if ecx.stack().len() <= frame && is_ret(&ecx) {
-                        Renderer::new(promise, &ecx, tcx, session).render_main_window(None, String::new());
-                        break;
-                    }
-                    match ecx.step() {
-                        Ok(true) => continue,
-                        Ok(false) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, "interpretation finished".to_string()),
-                        Err(e) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("{:?}", e)),
-                    }
-                    break;
-                }
-            }
-            Some("continue") => {
-                loop {
-                    match ecx.step() {
-                        Ok(true) => continue,
-                        Ok(false) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, "interpretation finished".to_string()),
-                        Err(e) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("{:?}", e)),
-                    }
-                    break;
-                }
-            },
-            Some("reverse_ptr") => Renderer::new(promise, &ecx, tcx, session).render_reverse_ptr(matches.next().map(str::parse)),
-            Some("ptr") => Renderer::new(promise, &ecx, tcx, session).render_ptr_memory(matches.next().map(str::parse), matches.next().map(str::parse)),
-            Some("frame") => match matches.next().map(str::parse) {
-                Some(Ok(n)) => Renderer::new(promise, &ecx, tcx, session).render_main_window(Some(n), String::new()),
-                Some(Err(e)) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("not a number: {:?}", e)),
-                // display current frame
-                None => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, String::new()),
-            },
-            Some("frames") => promise.set(Json(r###"[{function: "foo"}, {function: "bar"}]"###.to_owned())),
-            Some(cmd) => Renderer::new(promise, &ecx, tcx, session).render_main_window(None, format!("unknown command: {}", cmd)),
+            Some("frames") => dump_frames(&mut ecx, session, tcx, matches, promise),
+            Some("frame") => dump_frame(&mut ecx, session, tcx, matches, promise),
+            Some(cmd) => promise.set(Json(format!("\"unknown option: `{}`\"", cmd))),
         }
     }
     handle.join().unwrap();
 }
 
+fn dump_frames<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalContext<'a, 'tcx>, session: &Session, tcx: TyCtxt<'a, 'tcx, 'tcx>, _paths: I, promise: promising_future::Promise<Page>) {
+    let frames: Vec<_> = ecx.stack().iter().map(|frame| Frame {
+        function: tcx.absolute_item_path_str(frame.def_id),
+        span: session.codemap().span_to_string(frame.span),
+    }).collect();
+    promise.set(Json(serde_json::to_string(&frames).unwrap()));
+}
+
+fn json_error<T: ::std::fmt::Display>(promise: promising_future::Promise<Page>, t: T) {
+    promise.set(Json(format!("\"{}\"", t)));
+}
+
+fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalContext<'a, 'tcx>, session: &Session, tcx: TyCtxt<'a, 'tcx, 'tcx>, mut paths: I, promise: promising_future::Promise<Page>) {
+    let frame: usize = match paths.next().map(std::str::FromStr::from_str) {
+        Some(Ok(val)) => val,
+        Some(Err(_)) => {
+            json_error(promise, "given stackframe is not a number");
+            return;
+        },
+        None => {
+            let frame = ecx.stack().len();
+            if frame == 0 {
+                json_error(promise, "no stack frame");
+                return;
+            }
+            frame - 1
+        },
+    };
+    if frame >= ecx.stack().len() {
+        json_error(promise, format!("only {} stack frames available", ecx.stack().len()));
+        return;
+    }
+    let frame = &ecx.stack()[frame];
+    match paths.next() {
+        None => {
+            let frame = Frame {
+                function: tcx.item_path_str(frame.def_id),
+                span: session.codemap().span_to_string(frame.span),
+            };
+            promise.set(Json(serde_json::to_string(&frame).unwrap()));
+        },
+        Some("locals") => match paths.next() {
+            None => {
+                let locals = frame.mir.local_decls.
+                promise.set(Json(serde_json::to_string(&locals).unwrap()));
+            },
+            Some(other) => json_error(promise, format!("local info: {}", other)),
+        },
+        Some(other) => json_error(promise, format!("invalid frame info: {}", other)),
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Frame {
+    function: String,
+    span: String,
+}
+
+fn process_cmd<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalContext<'a, 'tcx>, mut paths: I, promise: promising_future::Promise<Page>) {
+    match paths.next() {
+        Some("step") => match ecx.step() {
+            Ok(true) => promise.set(Json("true".to_owned())),
+            Ok(false) => promise.set(Json("false".to_owned())),
+            Err(e) => promise.set(Json(format!("\"{:?}\"", e))),
+        },
+        Some("next") => {
+            let frame = ecx.stack().len();
+            if frame == 0 {
+                promise.set(Json("\"no stack frame\"".to_owned()));
+                return;
+            }
+            let stmt = ecx.stack().last().unwrap().stmt;
+            let block = ecx.stack().last().unwrap().block;
+            loop {
+                match ecx.step() {
+                    Ok(true) => if ecx.stack().len() == frame && (block < ecx.stack().last().unwrap().block || stmt < ecx.stack().last().unwrap().stmt) {
+                        promise.set(Json("true".to_owned()));
+                    } else {
+                        continue;
+                    },
+                    Ok(false) => promise.set(Json("false".to_owned())),
+                    Err(e) => promise.set(Json(format!("\"{:?}\"", e))),
+                }
+                break;
+            }
+        },
+        Some("return") => {
+            let frame = ecx.stack().len();
+            if frame == 0 {
+                promise.set(Json("\"no stack frame\"".to_owned()));
+                return;
+            }
+            fn is_ret(ecx: &EvalContext) -> bool {
+                let stack = ecx.stack().last().unwrap();
+                let basic_block = &stack.mir.basic_blocks()[stack.block];
+
+                match basic_block.terminator().kind {
+                    rustc::mir::TerminatorKind::Return => stack.stmt >= basic_block.statements.len(),
+                    _ => false,
+                }
+            }
+            loop {
+                if ecx.stack().len() <= frame && is_ret(&ecx) {
+                    promise.set(Json("true".to_owned()));
+                    break;
+                }
+                match ecx.step() {
+                    Ok(true) => continue,
+                    Ok(false) => promise.set(Json("false".to_owned())),
+                    Err(e) => promise.set(Json(format!("\"{:?}\"", e))),
+                }
+                break;
+            }
+        }
+        Some("continue") => {
+            loop {
+                match ecx.step() {
+                    Ok(true) => continue,
+                    Ok(false) => promise.set(Json("false".to_owned())),
+                    Err(e) => promise.set(Json(format!("\"{:?}\"", e))),
+                }
+                break;
+            }
+        },
+        Some(cmd) => promise.set(Json(format!("\"unknown command: `{}`\"", cmd))),
+        None => promise.set(Json("\"no command issued\"".to_owned())),
+    }
+}
 
 
 fn find_sysroot() -> String {
