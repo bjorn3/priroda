@@ -8748,14 +8748,21 @@ var _oli_obk$priroda$Main$trTd = function (s) {
 var _oli_obk$priroda$Main$printFrame = function (frame) {
 	return _oli_obk$priroda$Main$trTd(frame.$function);
 };
-var _oli_obk$priroda$Main$Frame = function (a) {
-	return {$function: a};
+var _oli_obk$priroda$Main$printLocals = function (local) {
+	return _oli_obk$priroda$Main$trTd(local);
 };
-var _oli_obk$priroda$Main$frameDecoder = A3(
-	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-	'function',
-	_elm_lang$core$Json_Decode$string,
-	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_oli_obk$priroda$Main$Frame));
+var _oli_obk$priroda$Main$Frame = F2(
+	function (a, b) {
+		return {$function: a, locals: b};
+	});
+var _oli_obk$priroda$Main$frameDecoder = A2(
+	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$hardcoded,
+	{ctor: '[]'},
+	A3(
+		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
+		'function',
+		_elm_lang$core$Json_Decode$string,
+		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_oli_obk$priroda$Main$Frame)));
 var _oli_obk$priroda$Main$decodeFramesJson = _elm_lang$core$Json_Decode$list(_oli_obk$priroda$Main$frameDecoder);
 var _oli_obk$priroda$Main$Model = F2(
 	function (a, b) {
@@ -8785,7 +8792,7 @@ var _oli_obk$priroda$Main$CommandFinished = function (a) {
 var _oli_obk$priroda$Main$Command = function (a) {
 	return {ctor: 'Command', _0: a};
 };
-var _oli_obk$priroda$Main$ReloadFrames = {ctor: 'ReloadFrames'};
+var _oli_obk$priroda$Main$Reload = {ctor: 'Reload'};
 var _oli_obk$priroda$Main$Next = {ctor: 'Next'};
 var _oli_obk$priroda$Main$Return = {ctor: 'Return'};
 var _oli_obk$priroda$Main$Step = {ctor: 'Step'};
@@ -8800,7 +8807,7 @@ var _oli_obk$priroda$Main$view = function (model) {
 				_elm_lang$html$Html$button,
 				{
 					ctor: '::',
-					_0: _elm_lang$html$Html_Events$onClick(_oli_obk$priroda$Main$ReloadFrames),
+					_0: _elm_lang$html$Html_Events$onClick(_oli_obk$priroda$Main$Reload),
 					_1: {ctor: '[]'}
 				},
 				{
@@ -8891,7 +8898,7 @@ var _oli_obk$priroda$Main$view = function (model) {
 											{ctor: '[]'},
 											{
 												ctor: '::',
-												_0: _elm_lang$html$Html$text('Logs'),
+												_0: _elm_lang$html$Html$text('Locals'),
 												_1: {ctor: '[]'}
 											}),
 										_1: {
@@ -8899,8 +8906,41 @@ var _oli_obk$priroda$Main$view = function (model) {
 											_0: A2(
 												_elm_lang$html$Html$table,
 												{ctor: '[]'},
-												A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$trTd, model.log)),
-											_1: {ctor: '[]'}
+												A2(
+													_elm_lang$core$Maybe$withDefault,
+													{
+														ctor: '::',
+														_0: _oli_obk$priroda$Main$trTd('No Locals'),
+														_1: {ctor: '[]'}
+													},
+													A2(
+														_elm_lang$core$Maybe$map,
+														_elm_lang$core$List$map(_oli_obk$priroda$Main$printLocals),
+														A2(
+															_elm_lang$core$Maybe$map,
+															function (_) {
+																return _.locals;
+															},
+															_elm_lang$core$List$head(model.frames))))),
+											_1: {
+												ctor: '::',
+												_0: A2(
+													_elm_lang$html$Html$h1,
+													{ctor: '[]'},
+													{
+														ctor: '::',
+														_0: _elm_lang$html$Html$text('Logs'),
+														_1: {ctor: '[]'}
+													}),
+												_1: {
+													ctor: '::',
+													_0: A2(
+														_elm_lang$html$Html$table,
+														{ctor: '[]'},
+														A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$trTd, model.log)),
+													_1: {ctor: '[]'}
+												}
+											}
 										}
 									}
 								}
@@ -8958,7 +8998,7 @@ var _oli_obk$priroda$Main$update = F2(
 	function (msg, model) {
 		var _p0 = msg;
 		switch (_p0.ctor) {
-			case 'ReloadFrames':
+			case 'Reload':
 				return {ctor: '_Tuple2', _0: model, _1: _oli_obk$priroda$Main$getFrames};
 			case 'Command':
 				return {

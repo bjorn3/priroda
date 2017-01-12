@@ -23,7 +23,10 @@ main =
 
 type alias Frame =
     { function : String
+      ,locals: List Local
     }
+
+type alias Local = String
 
 
 type alias Model =
@@ -104,6 +107,9 @@ printFrame : Frame -> Html Msg
 printFrame frame =
     trTd frame.function
 
+printLocals: Local -> Html Msg
+printLocals local = trTd local
+
 
 view : Model -> Html Msg
 view model =
@@ -115,6 +121,13 @@ view model =
         , button [ onClick (Command Return) ] [ text "Return" ]
         , h1 [] [ text "Stackframes" ]
         , table [] (List.map printFrame model.frames)
+        , h1 [] [ text "Locals" ]
+        , table [] (model.frames
+            |> List.head
+            |> Maybe.map .locals
+            |> Maybe.map (List.map printLocals)
+            |> Maybe.withDefault ([trTd "No Locals"])
+            )
         , h1 [] [ text "Logs" ]
         , table [] (List.map trTd model.log)
         ]
@@ -152,6 +165,7 @@ frameDecoder : Decode.Decoder Frame
 frameDecoder =
     DecodePipeline.decode Frame
         |> DecodePipeline.required "function" Decode.string
+        |> DecodePipeline.hardcoded [] 
 
 
 decodeSuccess : Decode.Decoder CommandResult
