@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Html exposing (..)
 import Html.Events exposing (..)
+import Html.Attributes exposing (style)
 import Http
 import Json.Decode as Decode
 import Json.Decode.Pipeline as DecodePipeline
@@ -26,7 +27,7 @@ type alias Frame =
       ,locals: List Local
     }
 
-type alias Local = String
+type alias Local = Maybe String
 
 
 type alias Model =
@@ -51,6 +52,7 @@ type Msg
     | Command DebuggerCommand
     | CommandFinished (Result Http.Error CommandResult)
     | Frames (Result Http.Error (List Frame))
+    | Locals (Result Http.Error (List Local))
 
 
 type DebuggerCommand
@@ -85,13 +87,26 @@ update msg model =
             ( { model | log = (List.append model.log [ e ]) }, Cmd.none )
 
         Frames (Ok frames) ->
-            ( { model | frames = frames }, Cmd.none )
+            ( { model | frames = frames }, Http.send Locals (Http.get (base_url ++ "frame/" ++ (toString (List.length model.frames)) ++ "/locals") decodeLocals) )
+
+        Locals (Ok locals) ->
+            ( { model | frames = (model.frames
+                |> List.head
+                |> Maybe.map (\frame -> {frame | locals = locals })
+                |> Maybe.map2 (\tail head -> head :: tail) (List.tail model.frames)
+                |> Maybe.withDefault []
+            )}, Cmd.none )
 
         CommandFinished (Err error) ->
-            ( { model | log = (List.append model.log [ "network error: " ++ (toString error) ]) }, Cmd.none )
-
+            ( { model | log = (List.append model.log [ "network error when fetching command: " ++ (toString error) ]) }, Cmd.none )
+        Frames (Err (Http.BadPayload text _)) ->
+            ( { model | log = (List.append model.log [ "error fetching stack frame: " ++ text ])}, Cmd.none)
         Frames (Err error) ->
-            ( { model | log = (List.append model.log [ "network error: " ++ (toString error) ]) }, Cmd.none )
+            ( { model | log = (List.append model.log [ "network error when fetching frames: " ++ (toString error) ]) }, Cmd.none )
+        Locals (Err (Http.BadPayload text _)) ->
+            ( { model | log = (List.append model.log [ "error fetching frame locals: " ++ text ])}, Cmd.none)
+        Locals (Err error) ->
+            ( { model | log = (List.append model.log [ "network error when fetching locals: " ++ (toString error) ]) }, Cmd.none )
 
 
 
@@ -107,8 +122,14 @@ printFrame : Frame -> Html Msg
 printFrame frame =
     trTd frame.function
 
-printLocals: Local -> Html Msg
-printLocals local = trTd local
+printLocal: Local -> Html Msg
+printLocal local = local
+    |> Maybe.withDefault ""
+    |> text
+    |> \x -> [x]
+    |> td [style [("border-top", "1px solid black")]]
+    |> \x -> [x]
+    |> tr [ ]
 
 
 view : Model -> Html Msg
@@ -122,10 +143,11 @@ view model =
         , h1 [] [ text "Stackframes" ]
         , table [] (List.map printFrame model.frames)
         , h1 [] [ text "Locals" ]
-        , table [] (model.frames
+        , table [ style [("border", "1px solid black")]] (model.frames
             |> List.head
             |> Maybe.map .locals
-            |> Maybe.map (List.map printLocals)
+            |> Maybe.map (List.map printLocal)
+            |> Maybe.map ((::) (tr[] [td [] [ text "Name"]]))
             |> Maybe.withDefault ([trTd "No Locals"])
             )
         , h1 [] [ text "Logs" ]
@@ -165,8 +187,11 @@ frameDecoder : Decode.Decoder Frame
 frameDecoder =
     DecodePipeline.decode Frame
         |> DecodePipeline.required "function" Decode.string
-        |> DecodePipeline.hardcoded [] 
+        |> DecodePipeline.hardcoded []
 
+localDecoder : Decode.Decoder Local
+localDecoder =
+    Decode.nullable Decode.string
 
 decodeSuccess : Decode.Decoder CommandResult
 decodeSuccess =
@@ -187,6 +212,8 @@ cmdResultDecoder =
         , Decode.string |> Decode.andThen (\v -> Decode.succeed (Error v))
         ]
 
+decodeLocals : Decode.Decoder (List Local)
+decodeLocals = Decode.list localDecoder
 
 decodeFramesJson : Decode.Decoder (List Frame)
 decodeFramesJson =
