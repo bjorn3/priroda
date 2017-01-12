@@ -1,7 +1,6 @@
 #![feature(rustc_private, custom_attribute)]
 #![feature(pub_restricted)]
 #![allow(unused_attributes)]
-#![feature(proc_macro)]
 
 #[macro_use]
 extern crate serde_derive;
@@ -29,6 +28,7 @@ use miri::{
     StackPopCleanup,
     Lvalue,
     Pointer,
+    ResourceLimits,
 };
 
 use rustc::session::Session;
@@ -68,11 +68,12 @@ impl<'a> CompilerCalls<'a> for MiriCompilerCalls {
 
             let mir = tcx.item_mir(def_id);
             let def_id = tcx.map.local_def_id(node_id);
-
-            let memory_size = 100*1024*1024; // 100MB
-            let stack_limit = 100;
-            let step_limit = 1000_000;
-            let mut ecx = EvalContext::new(tcx, memory_size, stack_limit, step_limit);
+            let limits = ResourceLimits {
+                memory_size: 100*1024*1024, // 100MB
+                stack_limit: 100,
+                step_limit: 1000_000,
+            };
+            let mut ecx = EvalContext::new(tcx, limits);
             let substs = tcx.intern_substs(&[]);
 
             ecx.push_stack_frame(
@@ -82,6 +83,7 @@ impl<'a> CompilerCalls<'a> for MiriCompilerCalls {
                 substs,
                 Lvalue::from_ptr(Pointer::zst_ptr()),
                 StackPopCleanup::None,
+                Vec::new(),
             ).unwrap();
 
             act(ecx, state.session, tcx);
@@ -199,7 +201,9 @@ fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalCo
         },
         Some("locals") => match paths.next() {
             None => {
-                let locals = frame.mir.local_decls.
+                let locals: Vec<_> = frame.mir.local_decls.iter().map(|local| {
+                    local.name.as_ref().map(|symb| symb.as_str().to_string())
+                }).collect();
                 promise.set(Json(serde_json::to_string(&locals).unwrap()));
             },
             Some(other) => json_error(promise, format!("local info: {}", other)),
