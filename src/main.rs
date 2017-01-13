@@ -201,8 +201,13 @@ fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalCo
         },
         Some("locals") => match paths.next() {
             None => {
-                let locals: Vec<_> = frame.mir.local_decls.iter().map(|local| {
-                    local.name.as_ref().map(|symb| symb.as_str().to_string())
+                let locals = frame.mir.local_decls.iter();
+                let locals: Vec<_> = locals.zip(&frame.locals).map(|(local, data)| {
+                    Local {
+                        name: local.name.as_ref().map(|symb| symb.as_str().to_string()),
+                        type: local.ty.to_string(),
+                        data: format!("{:?}", data),
+                    }
                 }).collect();
                 promise.set(Json(serde_json::to_string(&locals).unwrap()));
             },
@@ -210,6 +215,13 @@ fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalCo
         },
         Some(other) => json_error(promise, format!("invalid frame info: {}", other)),
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Local {
+    name: Option<String>,
+    type: String,
+    data: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
