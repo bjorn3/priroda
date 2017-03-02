@@ -25,6 +25,7 @@ main =
 type alias Frame =
     { function : String
     , locals : List Local
+    , return : ReturnLvalue
     }
 
 
@@ -32,6 +33,12 @@ type alias Local =
     { name : Maybe String
     , type_ : String
     , data : String
+    }
+
+
+type alias ReturnLvalue =
+    { type_ : String
+    , lvalue : String
     }
 
 
@@ -58,6 +65,7 @@ type Msg
     | CommandFinished (Result Http.Error CommandResult)
     | Frames (Result Http.Error (List Frame))
     | Locals (Result Http.Error (List Local))
+    | UpdateReturn (Result Http.Error ReturnLvalue)
 
 
 type DebuggerCommand
@@ -92,7 +100,7 @@ update msg model =
             ( { model | log = (List.append model.log [ e ]) }, Cmd.none )
 
         Frames (Ok frames) ->
-            ( { model | frames = frames }, Http.send Locals (Http.get (base_url ++ "frame/" ++ (toString (List.length model.frames)) ++ "/locals") decodeLocals) )
+            ( { model | frames = frames }, requestLocals ((List.length frames) - 1) )
 
         Locals (Ok locals) ->
             ( { model
@@ -100,6 +108,19 @@ update msg model =
                     (model.frames
                         |> List.head
                         |> Maybe.map (\frame -> { frame | locals = locals })
+                        |> Maybe.map2 (\tail head -> head :: tail) (List.tail model.frames)
+                        |> Maybe.withDefault []
+                    )
+              }
+            , Cmd.none
+            )
+
+        UpdateReturn (Ok retval) ->
+            ( { model
+                | frames =
+                    (model.frames
+                        |> List.head
+                        |> Maybe.map (\frame -> { frame | return = retval })
                         |> Maybe.map2 (\tail head -> head :: tail) (List.tail model.frames)
                         |> Maybe.withDefault []
                     )
@@ -122,6 +143,31 @@ update msg model =
         Locals (Err error) ->
             ( { model | log = (List.append model.log [ "network error when fetching locals: " ++ (toString error) ]) }, Cmd.none )
 
+        UpdateReturn (Err error) ->
+            ( { model | log = (List.append model.log [ "network error when fetching return lvalue: " ++ (toString error) ]) }, Cmd.none )
+
+
+request : Decode.Decoder a -> String -> (Result Http.Error a -> msg) -> Cmd msg
+request decoder url item =
+    decoder
+        |> Http.get (base_url ++ url)
+        |> Http.send item
+
+
+(+/) : String -> String -> String
+(+/) a b =
+    a ++ "/" ++ b
+
+
+requestLocals : number -> Cmd Msg
+requestLocals frame =
+    request decodeLocals ("frame" +/ (toString frame) +/ "locals") Locals
+
+
+requestRet : number -> Cmd Msg
+requestRet frame =
+    request returnDecoder ("frame" +/ (toString frame) +/ "return") UpdateReturn
+
 
 
 -- VIEW
@@ -135,6 +181,11 @@ trTd s =
 printFrame : Frame -> Html Msg
 printFrame frame =
     trTd frame.function
+
+
+printRet : ReturnLvalue -> Html Msg
+printRet ret =
+    text (ret.type_ ++ " @ " ++ ret.lvalue)
 
 
 printLocal : Local -> Html Msg
@@ -154,8 +205,17 @@ printLocal local =
                 |> text
     in
         [ name, type_, data ]
-            |> List.map (\x -> td [ style [ ( "border-top", "1px solid black" ) ] ])
+            |> List.map (\x -> td [ style [ ( "border-top", "1px solid black" ) ] ] [ x ])
             |> tr []
+
+
+lastFrame : List Frame -> (Frame -> a1) -> (a1 -> b) -> b -> b
+lastFrame frames what fn els =
+    frames
+        |> List.head
+        |> Maybe.map what
+        |> Maybe.map fn
+        |> Maybe.withDefault els
 
 
 view : Model -> Html Msg
@@ -168,15 +228,15 @@ view model =
         , button [ onClick (Command Return) ] [ text "Return" ]
         , h1 [] [ text "Stackframes" ]
         , table [] (List.map printFrame model.frames)
+        , h1 [] [ text "Return Value" ]
+        , lastFrame model.frames .return printRet (text "No Return value")
         , h1 [] [ text "Locals" ]
-        , table [ style [ ( "border", "1px solid black" ) ] ]
-            (model.frames
-                |> List.head
-                |> Maybe.map .locals
-                |> Maybe.map (List.map printLocal)
-                |> Maybe.map ((::) (tr [] [ td [] [ text "Name" ] ]))
-                |> Maybe.withDefault ([ trTd "No Locals" ])
-            )
+        , lastFrame model.frames
+            .locals
+            (\list -> (tr [] [ td [] [ text "Name" ], td [] [ text "Type" ], td [] [ text "Value" ] ]) :: List.map printLocal list)
+            [ trTd "No Locals" ]
+            |> table
+                [ style [ ( "border", "1px solid black" ) ] ]
         , h1 [] [ text "Logs" ]
         , table [] (List.map trTd model.log)
         ]
@@ -215,11 +275,22 @@ frameDecoder =
     DecodePipeline.decode Frame
         |> DecodePipeline.required "function" Decode.string
         |> DecodePipeline.hardcoded []
+        |> DecodePipeline.hardcoded { type_ = "unavailable", lvalue = "unavailable" }
 
 
 localDecoder : Decode.Decoder Local
 localDecoder =
-    Decode.nullable Decode.string
+    DecodePipeline.decode Local
+        |> DecodePipeline.required "name" (Decode.nullable Decode.string)
+        |> DecodePipeline.required "type_" Decode.string
+        |> DecodePipeline.required "data" Decode.string
+
+
+returnDecoder : Decode.Decoder ReturnLvalue
+returnDecoder =
+    DecodePipeline.decode ReturnLvalue
+        |> DecodePipeline.required "type_" Decode.string
+        |> DecodePipeline.required "lvalue" Decode.string
 
 
 decodeSuccess : Decode.Decoder CommandResult

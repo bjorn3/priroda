@@ -11,6 +11,7 @@ extern crate miri;
 extern crate rustc;
 extern crate rustc_driver;
 extern crate rustc_trans;
+extern crate rustc_errors;
 extern crate rustc_data_structures;
 extern crate env_logger;
 extern crate log_settings;
@@ -34,6 +35,11 @@ use miri::{
 use rustc::session::Session;
 use rustc_driver::{driver, CompilerCalls};
 use rustc::ty::TyCtxt;
+use rustc::mir;
+use rustc_driver::{Compilation, RustcDefaultCalls};
+use rustc::session::config::{self, Input, ErrorOutputType};
+use syntax::ast;
+use std::path::PathBuf;
 
 use std::sync::Mutex;
 use hyper::server::{Server, Request, Response};
@@ -50,7 +56,37 @@ use Page::*;
 
 struct MiriCompilerCalls;
 
-impl<'a> CompilerCalls<'a> for MiriCompilerCalls {
+impl<'a> CompilerCalls<'a> for MiriCompilerCalls {fn early_callback(
+        &mut self,
+        matches: &getopts::Matches,
+        sopts: &config::Options,
+        cfg: &ast::CrateConfig,
+        descriptions: &rustc_errors::registry::Registry,
+        output: ErrorOutputType
+    ) -> Compilation {
+        RustcDefaultCalls.early_callback(matches, sopts, cfg, descriptions, output)
+    }
+    fn no_input(
+        &mut self,
+        matches: &getopts::Matches,
+        sopts: &config::Options,
+        cfg: &ast::CrateConfig,
+        odir: &Option<PathBuf>,
+        ofile: &Option<PathBuf>,
+        descriptions: &rustc_errors::registry::Registry
+    ) -> Option<(Input, Option<PathBuf>)> {
+        RustcDefaultCalls.no_input(matches, sopts, cfg, odir, ofile, descriptions)
+    }
+    fn late_callback(
+        &mut self,
+        matches: &getopts::Matches,
+        sess: &Session,
+        input: &Input,
+        odir: &Option<PathBuf>,
+        ofile: &Option<PathBuf>
+    ) -> Compilation {
+        RustcDefaultCalls.late_callback(matches, sess, input, odir, ofile)
+    }
     fn build_controller(
         &mut self,
         _: &Session,
@@ -63,11 +99,11 @@ impl<'a> CompilerCalls<'a> for MiriCompilerCalls {
             let tcx = state.tcx.unwrap();
 
             let (node_id, span) = state.session.entry_fn.borrow().expect("no main or start function found");
-            let def_id = tcx.map.local_def_id(node_id);
+            let def_id = tcx.hir.local_def_id(node_id);
             debug!("found `main` function at: {:?}", span);
 
             let mir = tcx.item_mir(def_id);
-            let def_id = tcx.map.local_def_id(node_id);
+            let def_id = tcx.hir.local_def_id(node_id);
             let limits = ResourceLimits {
                 memory_size: 100*1024*1024, // 100MB
                 stack_limit: 100,
@@ -106,6 +142,7 @@ fn act<'a, 'tcx: 'a>(mut ecx: EvalContext<'a, 'tcx>, session: &Session, tcx: TyC
     if open::that(&addr).is_err() {
         println!("open {} in your browser", addr);
     };
+    println!("foo");
     let handle = std::thread::spawn(|| {
         server.handle(move |req: Request, mut res: Response| {
             if let RequestUri::AbsolutePath(path) = req.uri {
@@ -171,10 +208,11 @@ fn json_error<T: ::std::fmt::Display>(promise: promising_future::Promise<Page>, 
 }
 
 fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalContext<'a, 'tcx>, session: &Session, tcx: TyCtxt<'a, 'tcx, 'tcx>, mut paths: I, promise: promising_future::Promise<Page>) {
-    let frame: usize = match paths.next().map(std::str::FromStr::from_str) {
+    let next = paths.next();
+    let frame: usize = match next.map(std::str::FromStr::from_str) {
         Some(Ok(val)) => val,
         Some(Err(_)) => {
-            json_error(promise, "given stackframe is not a number");
+            json_error(promise, &format!("given stackframe is not a number: \\\"{}\\\"", next.unwrap()));
             return;
         },
         None => {
@@ -201,11 +239,12 @@ fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalCo
         },
         Some("locals") => match paths.next() {
             None => {
-                let locals = frame.mir.local_decls.iter();
+                // skip the return "local"
+                let locals = frame.mir.local_decls.iter().skip(1);
                 let locals: Vec<_> = locals.zip(&frame.locals).map(|(local, data)| {
                     Local {
                         name: local.name.as_ref().map(|symb| symb.as_str().to_string()),
-                        type: local.ty.to_string(),
+                        type_: local.ty.to_string(),
                         data: format!("{:?}", data),
                     }
                 }).collect();
@@ -213,6 +252,16 @@ fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalCo
             },
             Some(other) => json_error(promise, format!("local info: {}", other)),
         },
+        Some("return") => {
+            let type_ = frame.mir.local_decls[mir::RETURN_POINTER].ty.to_string();
+            let lvalue = format!("{:?}", frame.return_lvalue);
+            #[derive(Deserialize, Serialize)]
+            struct Return {
+                type_: String,
+                lvalue: String,
+            }
+            promise.set(Json(serde_json::to_string(&Return { type_, lvalue }).unwrap()))
+        }
         Some(other) => json_error(promise, format!("invalid frame info: {}", other)),
     }
 }
@@ -220,7 +269,7 @@ fn dump_frame<'a, 'b, 'tcx: 'a, I: Iterator<Item=&'b str> + 'b>(ecx: &mut EvalCo
 #[derive(Serialize, Deserialize, Debug)]
 struct Local {
     name: Option<String>,
-    type: String,
+    type_: String,
     data: String,
 }
 

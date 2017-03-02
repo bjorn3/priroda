@@ -9073,44 +9073,72 @@ var _elm_lang$http$Http$StringPart = F2(
 		return {ctor: 'StringPart', _0: a, _1: b};
 	});
 var _elm_lang$http$Http$stringPart = _elm_lang$http$Http$StringPart;
-var _oli_obk$priroda$Main$localDecoder = _elm_lang$core$Json_Decode$nullable(_elm_lang$core$Json_Decode$string);
-var _oli_obk$priroda$Main$decodeLocals = _elm_lang$core$Json_Decode$list(_oli_obk$priroda$Main$localDecoder);
 var _oli_obk$priroda$Main$base_url = 'http://localhost:54321/';
 var _oli_obk$priroda$Main$subscriptions = function (model) {
 	return _elm_lang$core$Platform_Sub$none;
 };
-var _oli_obk$priroda$Main$printLocal = function (local) {
-	return function (x) {
-		return function (x) {
-			return A2(
-				_elm_lang$html$Html$tr,
-				{ctor: '[]'},
-				{
-					ctor: '::',
-					_0: x,
-					_1: {ctor: '[]'}
-				});
-		}(
+var _oli_obk$priroda$Main$lastFrame = F4(
+	function (frames, what, fn, els) {
+		return A2(
+			_elm_lang$core$Maybe$withDefault,
+			els,
 			A2(
-				_elm_lang$html$Html$td,
-				{
+				_elm_lang$core$Maybe$map,
+				fn,
+				A2(
+					_elm_lang$core$Maybe$map,
+					what,
+					_elm_lang$core$List$head(frames))));
+	});
+var _oli_obk$priroda$Main$printLocal = function (local) {
+	var data = _elm_lang$html$Html$text(local.data);
+	var type_ = _elm_lang$html$Html$text(local.type_);
+	var name = _elm_lang$html$Html$text(
+		A2(_elm_lang$core$Maybe$withDefault, '', local.name));
+	return A2(
+		_elm_lang$html$Html$tr,
+		{ctor: '[]'},
+		A2(
+			_elm_lang$core$List$map,
+			function (x) {
+				return A2(
+					_elm_lang$html$Html$td,
+					{
+						ctor: '::',
+						_0: _elm_lang$html$Html_Attributes$style(
+							{
+								ctor: '::',
+								_0: {ctor: '_Tuple2', _0: 'border-top', _1: '1px solid black'},
+								_1: {ctor: '[]'}
+							}),
+						_1: {ctor: '[]'}
+					},
+					{
+						ctor: '::',
+						_0: x,
+						_1: {ctor: '[]'}
+					});
+			},
+			{
+				ctor: '::',
+				_0: name,
+				_1: {
 					ctor: '::',
-					_0: _elm_lang$html$Html_Attributes$style(
-						{
-							ctor: '::',
-							_0: {ctor: '_Tuple2', _0: 'border-top', _1: '1px solid black'},
-							_1: {ctor: '[]'}
-						}),
-					_1: {ctor: '[]'}
-				},
-				{
-					ctor: '::',
-					_0: x,
-					_1: {ctor: '[]'}
-				}));
-	}(
-		_elm_lang$html$Html$text(
-			A2(_elm_lang$core$Maybe$withDefault, '', local)));
+					_0: type_,
+					_1: {
+						ctor: '::',
+						_0: data,
+						_1: {ctor: '[]'}
+					}
+				}
+			}));
+};
+var _oli_obk$priroda$Main$printRet = function (ret) {
+	return _elm_lang$html$Html$text(
+		A2(
+			_elm_lang$core$Basics_ops['++'],
+			ret.type_,
+			A2(_elm_lang$core$Basics_ops['++'], ' @ ', ret.lvalue)));
 };
 var _oli_obk$priroda$Main$trTd = function (s) {
 	return A2(
@@ -9132,25 +9160,106 @@ var _oli_obk$priroda$Main$trTd = function (s) {
 var _oli_obk$priroda$Main$printFrame = function (frame) {
 	return _oli_obk$priroda$Main$trTd(frame.$function);
 };
-var _oli_obk$priroda$Main$Frame = F2(
+var _oli_obk$priroda$Main_ops = _oli_obk$priroda$Main_ops || {};
+_oli_obk$priroda$Main_ops['+/'] = F2(
 	function (a, b) {
-		return {$function: a, locals: b};
+		return A2(
+			_elm_lang$core$Basics_ops['++'],
+			a,
+			A2(_elm_lang$core$Basics_ops['++'], '/', b));
+	});
+var _oli_obk$priroda$Main$request = F3(
+	function (decoder, url, item) {
+		return A2(
+			_elm_lang$http$Http$send,
+			item,
+			A2(
+				_elm_lang$http$Http$get,
+				A2(_elm_lang$core$Basics_ops['++'], _oli_obk$priroda$Main$base_url, url),
+				decoder));
+	});
+var _oli_obk$priroda$Main$Frame = F3(
+	function (a, b, c) {
+		return {$function: a, locals: b, $return: c};
 	});
 var _oli_obk$priroda$Main$frameDecoder = A2(
 	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$hardcoded,
-	{ctor: '[]'},
+	{type_: 'unavailable', lvalue: 'unavailable'},
+	A2(
+		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$hardcoded,
+		{ctor: '[]'},
+		A3(
+			_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
+			'function',
+			_elm_lang$core$Json_Decode$string,
+			_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_oli_obk$priroda$Main$Frame))));
+var _oli_obk$priroda$Main$decodeFramesJson = _elm_lang$core$Json_Decode$list(_oli_obk$priroda$Main$frameDecoder);
+var _oli_obk$priroda$Main$Local = F3(
+	function (a, b, c) {
+		return {name: a, type_: b, data: c};
+	});
+var _oli_obk$priroda$Main$localDecoder = A3(
+	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
+	'data',
+	_elm_lang$core$Json_Decode$string,
 	A3(
 		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-		'function',
+		'type_',
 		_elm_lang$core$Json_Decode$string,
-		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_oli_obk$priroda$Main$Frame)));
-var _oli_obk$priroda$Main$decodeFramesJson = _elm_lang$core$Json_Decode$list(_oli_obk$priroda$Main$frameDecoder);
+		A3(
+			_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
+			'name',
+			_elm_lang$core$Json_Decode$nullable(_elm_lang$core$Json_Decode$string),
+			_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_oli_obk$priroda$Main$Local))));
+var _oli_obk$priroda$Main$decodeLocals = _elm_lang$core$Json_Decode$list(_oli_obk$priroda$Main$localDecoder);
+var _oli_obk$priroda$Main$ReturnLvalue = F2(
+	function (a, b) {
+		return {type_: a, lvalue: b};
+	});
+var _oli_obk$priroda$Main$returnDecoder = A3(
+	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
+	'lvalue',
+	_elm_lang$core$Json_Decode$string,
+	A3(
+		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
+		'type_',
+		_elm_lang$core$Json_Decode$string,
+		_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_oli_obk$priroda$Main$ReturnLvalue)));
 var _oli_obk$priroda$Main$Model = F2(
 	function (a, b) {
 		return {frames: a, log: b};
 	});
+var _oli_obk$priroda$Main$UpdateReturn = function (a) {
+	return {ctor: 'UpdateReturn', _0: a};
+};
+var _oli_obk$priroda$Main$requestRet = function (frame) {
+	return A3(
+		_oli_obk$priroda$Main$request,
+		_oli_obk$priroda$Main$returnDecoder,
+		A2(
+			_oli_obk$priroda$Main_ops['+/'],
+			A2(
+				_oli_obk$priroda$Main_ops['+/'],
+				'frame',
+				_elm_lang$core$Basics$toString(frame)),
+			'return'),
+		_oli_obk$priroda$Main$UpdateReturn);
+};
 var _oli_obk$priroda$Main$Locals = function (a) {
 	return {ctor: 'Locals', _0: a};
+};
+var _oli_obk$priroda$Main$requestLocals = function (frame) {
+	return A3(
+		_oli_obk$priroda$Main$request,
+		_oli_obk$priroda$Main$decodeLocals,
+		A2(
+			_oli_obk$priroda$Main_ops['+/'],
+			A2(
+				_oli_obk$priroda$Main_ops['+/'],
+				'frame',
+				_elm_lang$core$Basics$toString(frame)),
+			'locals'),
+		_oli_obk$priroda$Main$Locals);
 };
 var _oli_obk$priroda$Main$Frames = function (a) {
 	return {ctor: 'Frames', _0: a};
@@ -9282,60 +9391,19 @@ var _oli_obk$priroda$Main$view = function (model) {
 											{ctor: '[]'},
 											{
 												ctor: '::',
-												_0: _elm_lang$html$Html$text('Locals'),
+												_0: _elm_lang$html$Html$text('Return Value'),
 												_1: {ctor: '[]'}
 											}),
 										_1: {
 											ctor: '::',
-											_0: A2(
-												_elm_lang$html$Html$table,
-												{
-													ctor: '::',
-													_0: _elm_lang$html$Html_Attributes$style(
-														{
-															ctor: '::',
-															_0: {ctor: '_Tuple2', _0: 'border', _1: '1px solid black'},
-															_1: {ctor: '[]'}
-														}),
-													_1: {ctor: '[]'}
+											_0: A4(
+												_oli_obk$priroda$Main$lastFrame,
+												model.frames,
+												function (_) {
+													return _.$return;
 												},
-												A2(
-													_elm_lang$core$Maybe$withDefault,
-													{
-														ctor: '::',
-														_0: _oli_obk$priroda$Main$trTd('No Locals'),
-														_1: {ctor: '[]'}
-													},
-													A2(
-														_elm_lang$core$Maybe$map,
-														F2(
-															function (x, y) {
-																return {ctor: '::', _0: x, _1: y};
-															})(
-															A2(
-																_elm_lang$html$Html$tr,
-																{ctor: '[]'},
-																{
-																	ctor: '::',
-																	_0: A2(
-																		_elm_lang$html$Html$td,
-																		{ctor: '[]'},
-																		{
-																			ctor: '::',
-																			_0: _elm_lang$html$Html$text('Name'),
-																			_1: {ctor: '[]'}
-																		}),
-																	_1: {ctor: '[]'}
-																})),
-														A2(
-															_elm_lang$core$Maybe$map,
-															_elm_lang$core$List$map(_oli_obk$priroda$Main$printLocal),
-															A2(
-																_elm_lang$core$Maybe$map,
-																function (_) {
-																	return _.locals;
-																},
-																_elm_lang$core$List$head(model.frames)))))),
+												_oli_obk$priroda$Main$printRet,
+												_elm_lang$html$Html$text('No Return value')),
 											_1: {
 												ctor: '::',
 												_0: A2(
@@ -9343,16 +9411,96 @@ var _oli_obk$priroda$Main$view = function (model) {
 													{ctor: '[]'},
 													{
 														ctor: '::',
-														_0: _elm_lang$html$Html$text('Logs'),
+														_0: _elm_lang$html$Html$text('Locals'),
 														_1: {ctor: '[]'}
 													}),
 												_1: {
 													ctor: '::',
 													_0: A2(
 														_elm_lang$html$Html$table,
-														{ctor: '[]'},
-														A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$trTd, model.log)),
-													_1: {ctor: '[]'}
+														{
+															ctor: '::',
+															_0: _elm_lang$html$Html_Attributes$style(
+																{
+																	ctor: '::',
+																	_0: {ctor: '_Tuple2', _0: 'border', _1: '1px solid black'},
+																	_1: {ctor: '[]'}
+																}),
+															_1: {ctor: '[]'}
+														},
+														A4(
+															_oli_obk$priroda$Main$lastFrame,
+															model.frames,
+															function (_) {
+																return _.locals;
+															},
+															function (list) {
+																return {
+																	ctor: '::',
+																	_0: A2(
+																		_elm_lang$html$Html$tr,
+																		{ctor: '[]'},
+																		{
+																			ctor: '::',
+																			_0: A2(
+																				_elm_lang$html$Html$td,
+																				{ctor: '[]'},
+																				{
+																					ctor: '::',
+																					_0: _elm_lang$html$Html$text('Name'),
+																					_1: {ctor: '[]'}
+																				}),
+																			_1: {
+																				ctor: '::',
+																				_0: A2(
+																					_elm_lang$html$Html$td,
+																					{ctor: '[]'},
+																					{
+																						ctor: '::',
+																						_0: _elm_lang$html$Html$text('Type'),
+																						_1: {ctor: '[]'}
+																					}),
+																				_1: {
+																					ctor: '::',
+																					_0: A2(
+																						_elm_lang$html$Html$td,
+																						{ctor: '[]'},
+																						{
+																							ctor: '::',
+																							_0: _elm_lang$html$Html$text('Value'),
+																							_1: {ctor: '[]'}
+																						}),
+																					_1: {ctor: '[]'}
+																				}
+																			}
+																		}),
+																	_1: A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$printLocal, list)
+																};
+															},
+															{
+																ctor: '::',
+																_0: _oli_obk$priroda$Main$trTd('No Locals'),
+																_1: {ctor: '[]'}
+															})),
+													_1: {
+														ctor: '::',
+														_0: A2(
+															_elm_lang$html$Html$h1,
+															{ctor: '[]'},
+															{
+																ctor: '::',
+																_0: _elm_lang$html$Html$text('Logs'),
+																_1: {ctor: '[]'}
+															}),
+														_1: {
+															ctor: '::',
+															_0: A2(
+																_elm_lang$html$Html$table,
+																{ctor: '[]'},
+																A2(_elm_lang$core$List$map, _oli_obk$priroda$Main$trTd, model.log)),
+															_1: {ctor: '[]'}
+														}
+													}
 												}
 											}
 										}
@@ -9484,28 +9632,14 @@ var _oli_obk$priroda$Main$update = F2(
 				}
 			case 'Frames':
 				if (_p0._0.ctor === 'Ok') {
+					var _p1 = _p0._0._0;
 					return {
 						ctor: '_Tuple2',
 						_0: _elm_lang$core$Native_Utils.update(
 							model,
-							{frames: _p0._0._0}),
-						_1: A2(
-							_elm_lang$http$Http$send,
-							_oli_obk$priroda$Main$Locals,
-							A2(
-								_elm_lang$http$Http$get,
-								A2(
-									_elm_lang$core$Basics_ops['++'],
-									_oli_obk$priroda$Main$base_url,
-									A2(
-										_elm_lang$core$Basics_ops['++'],
-										'frame/',
-										A2(
-											_elm_lang$core$Basics_ops['++'],
-											_elm_lang$core$Basics$toString(
-												_elm_lang$core$List$length(model.frames)),
-											'/locals'))),
-								_oli_obk$priroda$Main$decodeLocals))
+							{frames: _p1}),
+						_1: _oli_obk$priroda$Main$requestLocals(
+							_elm_lang$core$List$length(_p1) - 1)
 					};
 				} else {
 					if (_p0._0._0.ctor === 'BadPayload') {
@@ -9547,7 +9681,7 @@ var _oli_obk$priroda$Main$update = F2(
 						};
 					}
 				}
-			default:
+			case 'Locals':
 				if (_p0._0.ctor === 'Ok') {
 					return {
 						ctor: '_Tuple2',
@@ -9614,6 +9748,55 @@ var _oli_obk$priroda$Main$update = F2(
 							_1: _elm_lang$core$Platform_Cmd$none
 						};
 					}
+				}
+			default:
+				if (_p0._0.ctor === 'Ok') {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{
+								frames: A2(
+									_elm_lang$core$Maybe$withDefault,
+									{ctor: '[]'},
+									A3(
+										_elm_lang$core$Maybe$map2,
+										F2(
+											function (tail, head) {
+												return {ctor: '::', _0: head, _1: tail};
+											}),
+										_elm_lang$core$List$tail(model.frames),
+										A2(
+											_elm_lang$core$Maybe$map,
+											function (frame) {
+												return _elm_lang$core$Native_Utils.update(
+													frame,
+													{$return: _p0._0._0});
+											},
+											_elm_lang$core$List$head(model.frames))))
+							}),
+						_1: _elm_lang$core$Platform_Cmd$none
+					};
+				} else {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{
+								log: A2(
+									_elm_lang$core$List$append,
+									model.log,
+									{
+										ctor: '::',
+										_0: A2(
+											_elm_lang$core$Basics_ops['++'],
+											'network error when fetching return lvalue: ',
+											_elm_lang$core$Basics$toString(_p0._0._0)),
+										_1: {ctor: '[]'}
+									})
+							}),
+						_1: _elm_lang$core$Platform_Cmd$none
+					};
 				}
 		}
 	});
