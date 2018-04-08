@@ -122,9 +122,6 @@ fn act<'a, 'tcx: 'a>(session: &Session, tcx: TyCtxt<'a, 'tcx, 'tcx>) {
             Ok(Service(sender.lock().unwrap().clone()))
         }).expect("could not create http server");
         let addr = format!("http://{}", server.local_addr().unwrap());
-        if open::that(&addr).is_err() {
-            println!("open {} in your browser", addr);
-        };
         server.run().unwrap()
     });
 
