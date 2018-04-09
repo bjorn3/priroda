@@ -1,1 +1,1 @@
-web: target/release/release/priroda example.rs
+web: source ~/.cargo/env && cargo run -- example.rs
