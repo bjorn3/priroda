@@ -1,1 +1,1 @@
-web: source ~/.cargo/env && cargo run -- example.rs
+web: export PATH="$HOME/.cargo/bin:$PATH" && cargo run -- example.rs
