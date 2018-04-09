@@ -1,1 +1,1 @@
-web: export PATH="$HOME/.cargo/bin:$PATH" && cargo run -- example.rs
+web: export PATH="$HOME/.cargo/bin:$PATH" && rustup run nightly target/release/priroda example.rs
