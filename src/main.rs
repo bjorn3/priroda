@@ -117,7 +117,7 @@ fn act<'a, 'tcx: 'a>(session: &Session, tcx: TyCtxt<'a, 'tcx, 'tcx>) {
 
     let handle = std::thread::spawn(|| {
         // setup server
-        let addr = format!("127.0.0.1:{}", ::std::env::var("PORT").unwrap()).parse().unwrap();
+        let addr = format!("0.0.0.0:{}", ::std::env::var("PORT").unwrap()).parse().unwrap();
         let server = hyper::server::Http::new().bind(&addr, move || {
             Ok(Service(sender.lock().unwrap().clone()))
         }).expect("could not create http server");
