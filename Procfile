@@ -1,1 +1,1 @@
-web: target/release/priroda example.rs
+web: target/release/release/priroda example.rs
