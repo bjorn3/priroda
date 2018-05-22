@@ -113,6 +113,7 @@ pub fn routes() -> Vec<::rocket::Route> {
 pub fn show(sender: State<PrirodaSender>) -> RResult<Html<String>> {
     sender.do_work(move |pcx| {
         let mut buf = String::new();
+        writeln!(buf, "{}", ::render::refresh_script(pcx)).unwrap();
 
         stack_trace::show(pcx, &mut buf).unwrap();
 
