@@ -1,5 +1,5 @@
 use rustc_data_structures::indexed_vec::Idx;
-use rustc::ty::{Ty, TyS, TypeVariants, TypeAndMut, layout::Size};
+use rustc::ty::{Ty, TyS, TypeVariants, TypeAndMut, layout::{LayoutOf, Size, Align}};
 use rustc::mir;
 
 use miri::{
@@ -9,6 +9,7 @@ use miri::{
     Allocation,
     Pointer,
     MemoryPointer,
+    Place,
 };
 
 use horrorshow::prelude::*;
@@ -90,10 +91,19 @@ pub fn render_locals<'a, 'tcx: 'a>(ecx: &EvalContext<'a, 'tcx>, frame: Option<&F
     }).into_string().unwrap()
 }
 
-pub fn print_primval(ty: Option<Ty>, val: PrimVal) -> String {
+pub fn print_primval<'a, 'tcx: 'a>(ecx: &EvalContext<'a, 'tcx>, ty: Option<Ty<'tcx>>, val: PrimVal) -> String {
     match val {
         PrimVal::Undef => "&lt;undef &gt;".to_string(),
-        PrimVal::Ptr(ptr) => format!("<a href=\"/ptr/{alloc}/{offset}\">Pointer({alloc})[{offset}]</a>", alloc = ptr.alloc_id.0, offset = ptr.offset.bytes()),
+        PrimVal::Ptr(ptr) => {
+            let txt = format!("<a href=\"/ptr/{alloc}/{offset}\">Pointer({alloc})[{offset}]</a>", alloc = ptr.alloc_id.0, offset = ptr.offset.bytes());
+            if let Some(ty) = ty {
+                return print_adtdef(ecx, ptr, ty)
+                    .map(|p| format!("{} ({})", p, txt))
+                    .unwrap_or(txt);
+            } else {
+                return txt;
+            }
+        },
         PrimVal::Bytes(bytes) => {
             match ty {
                 Some(&TyS { sty: TypeVariants::TyBool, ..}) => {
@@ -139,13 +149,39 @@ pub fn print_primval(ty: Option<Ty>, val: PrimVal) -> String {
     }
 }
 
-pub fn print_value(ecx: &EvalContext, ty: Ty, val: Value) -> Result<(Option<u64>, String), ()> {
+pub fn print_adtdef<'a, 'tcx: 'a>(ecx: &EvalContext<'a, 'tcx>, ptr: MemoryPointer, ty: Ty<'tcx>) -> Option<String> {
+    match ty.sty {
+        TypeVariants::TyAdt(adt_def, substs) => {
+            println!("{:?} {:?} {:?}", ptr, ty, adt_def.variants);
+            let layout = ecx.layout_of(ty).unwrap();
+            let val = ecx.read_value(ptr.into(), Align::from_bytes(1, 1).ok()?, ty).ok()?;
+            if adt_def.variants.len() == 1 {
+                let mut pretty = format!("{:?} {{ ", ecx.tcx.absolute_item_path_str(adt_def.did).replace("<", "&lt;").replace(">", "&gt;"));
+                for (i, adt_field) in adt_def.variants[0].fields.iter().enumerate() {
+                    let (field_val, field_ty) = ecx.read_field(val, None, ::rustc::mir::Field::new(i), ty).ok()??;
+                    pretty.push_str(&format!("{}, ", print_value(ecx, field_ty, field_val).ok()?.1));
+                }
+                pretty.push_str("}");
+                return Some(pretty)
+            }
+        }
+        _ => {},
+    }
+    None
+}
+
+pub fn print_value<'a, 'tcx: 'a>(ecx: &EvalContext<'a, 'tcx>, ty: Ty<'tcx>, val: Value) -> Result<(Option<u64>, String), ()> {
     let txt = match val {
         Value::ByRef(ptr, _align) => {
             let (alloc, txt, _len) = print_ptr(ecx, ptr)?;
-            return Ok((alloc, txt));
+            return Ok((
+                alloc,
+                print_adtdef(ecx, ptr.to_ptr().unwrap(), ty)
+                    .map(|p| format!("{} ({})", p, txt))
+                    .unwrap_or(txt)
+            ));
         },
-        Value::ByVal(primval) => print_primval(Some(ty), primval),
+        Value::ByVal(primval) => print_primval(ecx, Some(ty), primval),
         Value::ByValPair(val, extra) => {
             match ty.sty {
                 TypeVariants::TyRawPtr(TypeAndMut { ty: &TyS { sty: TypeVariants::TyStr, .. }, .. }) |
@@ -155,14 +191,14 @@ pub fn print_value(ecx: &EvalContext, ty: Ty, val: Value) -> Result<(Option<u64>
                             if (ptr.offset.bytes() as u128) < allocation.bytes.len() as u128 {
                                 let bytes = &allocation.bytes[ptr.offset.bytes() as usize..];
                                 let s = String::from_utf8_lossy(bytes);
-                                return Ok((None, format!("\"{}\" ({}, {})", s, print_primval(None, val), extra)));
+                                return Ok((None, format!("\"{}\" ({}, {})", s, print_primval(ecx, None, val), extra)));
                             }
                         }
                     }
                 }
                 _ => {}
             }
-            format!("{}, {}", print_primval(None, val), print_primval(None, extra))
+            format!("{}, {}", print_primval(ecx, None, val), print_primval(ecx, None, extra))
         },
     };
     Ok((None, txt))
