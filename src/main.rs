@@ -22,6 +22,8 @@ extern crate regex;
 extern crate lazy_static;
 extern crate miri;
 extern crate rocket;
+#[macro_use]
+extern crate yew;
 
 extern crate env_logger;
 extern crate log;
@@ -36,11 +38,12 @@ extern crate open;
 extern crate promising_future;
 #[cfg(feature = "render_source")]
 extern crate syntect;
-#[macro_use]
+//#[macro_use]
 extern crate horrorshow;
 extern crate cgraph;
 
 mod render;
+mod render_yew;
 mod step;
 mod watch;
 
