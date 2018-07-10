@@ -26,9 +26,11 @@ syntect = "2.0.0"
 horrorshow = "0.6.2"
 cgraph = { git = "https://github.com/oli-obk/cgraph.git", rev = "b65e460ee323b31dca55b5541141a6b73272e72a" }
 
+rustdoc = { path = "../rust-fork/src/librustdoc" }
+
 # Uncomment to use local checkout of miri
-# [patch."https://github.com/solson/miri.git"]
-# miri = { path = "../miri" }
+[patch."https://github.com/solson/miri.git"]
+miri = { path = "../miri" }
 
 [target.heroku]
 version = "nightly"

@@ -1,3 +1,4 @@
+pub mod docs;
 mod graphviz;
 pub mod locals;
 mod source;

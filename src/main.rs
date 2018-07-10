@@ -13,8 +13,11 @@
 extern crate syntax;
 #[macro_use(err)]
 extern crate rustc;
+extern crate rustc_metadata;
+extern crate rustc_resolve;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
+extern crate rustdoc;
 
 extern crate regex;
 #[macro_use]
@@ -75,6 +78,7 @@ pub struct PrirodaContext<'a, 'tcx: 'a> {
     step_count: &'a mut u128,
     traces: watch::Traces<'tcx>,
     config: &'a mut Config,
+    ast_crate: syntax::ast::Crate,
 }
 
 impl<'a, 'tcx: 'a> PrirodaContext<'a, 'tcx> {
@@ -299,6 +303,12 @@ fn main() {
             // Ignore result to restart in case of a crash
             let _ = std::thread::spawn(move || {
                 let mut control = driver::CompileController::basic();
+                let ast_crate = std::rc::Rc::new(std::cell::RefCell::new(None));
+                let ast_crate_clone = ast_crate.clone();
+
+                control.after_hir_lowering.callback = Box::new(move |state| {
+                    *ast_crate_clone.borrow_mut() = Some(state.expanded_crate.unwrap().clone());
+                });
 
                 control.after_analysis.callback = Box::new(move |state| {
                     state.session.abort_if_errors();
@@ -310,7 +320,10 @@ fn main() {
                         step_count: &mut *step_count,
                         traces: watch::Traces::new(),
                         config: &mut *config,
+                        ast_crate: ast_crate.borrow_mut().take().unwrap(),
                     };
+
+                    render::docs::init(&pcx);
 
                     // Step to the position where miri crashed if it crashed
                     for _ in 0..*pcx.step_count {
