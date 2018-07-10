@@ -53,7 +53,7 @@ pub fn init(pcx: &PrirodaContext) {
         send_trait: if crate_name == "core" {
             clean::path_to_def_local(&tcx, &["marker", "Send"])
         } else {
-            clean::path_to_def_local(&tcx, &["core", "marker", "Send"])
+            clean::path_to_def(&tcx, &["core", "marker", "Send"])
         },
         fake_def_ids: RefCell::new(FxHashMap()),
         all_fake_def_ids: RefCell::new(FxHashSet()),
