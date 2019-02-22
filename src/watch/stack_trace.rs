@@ -193,38 +193,26 @@ fn create_flame_graph<'a, 'tcx: 'a>(
 
     //::std::fs::write(format!("./resources/{}.txt", _file_name), flame_data.as_bytes())?;
 
-    let child = Command::new("../FlameGraph/flamegraph.pl")
-        .arg("-")
-        .arg("--title")
-        .arg(name)
-        .arg("--countname")
-        .arg(count_name)
-        .arg("--colors")
-        .arg(color_scheme)
-        .arg("--minwidth")
-        .arg("0.01")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn();
-    match child {
-        Ok(mut child) => {
-            child
-                .stdin
-                .as_mut()
-                .unwrap()
-                .write_all(flame_data.as_bytes())?;
-            match child.wait_with_output() {
-                Ok(output) => {
-                    let flame_graph = String::from_utf8(output.stdout).unwrap();
-                    //::std::fs::write(format!("./resources/{}.svg", _file_name), flame_graph.as_bytes())?;
-                    writeln!(buf, "{}", flame_graph).unwrap()
-                }
-                Err(err) => writeln!(buf, "<h1><pre>Wait error: {:?}</pre></h1>", err).unwrap(),
-            }
-        }
-        Err(err) => writeln!(buf, "<h1><pre>Spawn error: {:?}</pre></h1>", err).unwrap(),
-    }
+    use std::str::FromStr;
+    use inferno::flamegraph::{FuncFrameAttrsMap, Direction, Options, Palette, from_reader};
 
+    let options = Options {
+        colors: Palette::from_str(color_scheme).unwrap(),
+        bgcolors: None,
+        hash: false,
+        consistent_palette: false,
+        func_frameattrs: FuncFrameAttrsMap::default(),
+        direction: Direction::Straight,
+        title: name.to_string(),
+    };
+
+    let mut flame_graph = Vec::new();
+    from_reader(options, flame_data.as_bytes(), &mut flame_graph).unwrap();
+
+
+                    let flame_graph = String::from_utf8(flame_graph).unwrap();
+                    //::std::fs::write(format!("./resources/{}.svg", _file_name), flame_graph.as_bytes())?;
+                    writeln!(buf, "{}", flame_graph).unwrap();
     Ok(())
 }
 
