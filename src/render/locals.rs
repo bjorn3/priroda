@@ -230,6 +230,18 @@ fn pp_operand<'a, 'tcx: 'a>(
             println!("pretty adt: {}", pretty);
             return Ok(pretty);
         }
+        TyKind::FnPtr(_fn_sig) => {
+            if let Abi::Scalar(_) = op_ty.layout.abi {
+            } else {
+                Err(InterpError::AssumptionNotHeld)?;
+            }
+            let scalar = ecx.read_scalar(op_ty)?;
+            if let ScalarMaybeUndef::Scalar(Scalar::Ptr(ptr)) = &scalar {
+                if let Ok(instance) = ecx.memory().get_fn(*ptr) {
+                    return Ok(format!("fnptr({})", instance));
+                }
+            }
+        }
         _ => {}
     }
 
@@ -240,10 +252,23 @@ fn pp_operand<'a, 'tcx: 'a>(
     } else {
         Err(InterpError::AssumptionNotHeld)?;
     }
+
     let scalar = ecx.read_scalar(op_ty)?;
-    if let ScalarMaybeUndef::Scalar(Scalar::Ptr(_)) = &scalar {
-        return Ok(print_scalar_maybe_undef(scalar)); // If the value is a ptr, print it
+    if let ScalarMaybeUndef::Scalar(Scalar::Ptr(ptr)) = &scalar {
+        match op_ty.layout.ty.sty {
+            TyKind::RawPtr(..) | TyKind::Ref(..) => {
+                if let Some(global_alloc) = ecx.tcx.alloc_map.lock().get(ptr.alloc_id) {
+                    use rustc::mir::interpret::GlobalAlloc;
+                    match global_alloc {
+                        GlobalAlloc::Static(def_id) => return Ok(format!("staticptr({:?})+{}", def_id, ptr.offset.bytes())),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
     }
+
     let bits = scalar.to_bits(op_ty.layout.size)?;
     match op_ty.layout.ty.sty {
         TyKind::Bool => {

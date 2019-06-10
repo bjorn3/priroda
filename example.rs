@@ -9,6 +9,8 @@ fn some_fn() {
     }
 }
 
+static ABC: u8 = 0;
+
 struct MyWrapper<'a>(&'a mut u8);
 
 struct SomeRandomStruct<'a, A> {
@@ -32,6 +34,7 @@ union SomeUnion {
 }
 
 fn main() {
+    let _a = &ABC;
     let chr = '4';
     let _rer = SomeRandomStruct {
         ernrer: 24,
