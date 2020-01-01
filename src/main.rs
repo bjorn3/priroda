@@ -143,8 +143,9 @@ fn create_ecx<'tcx>(tcx: TyCtxt<'tcx>) -> InterpCx<'tcx> {
     .0
 }
 
+#[derive(Clone)]
 pub struct PrirodaSender(
-    Mutex<::std::sync::mpsc::Sender<Box<dyn FnOnce(&mut PrirodaContext) + Send>>>,
+    Arc<Mutex<::std::sync::mpsc::Sender<Box<dyn FnOnce(&mut PrirodaContext) + Send>>>>,
 );
 
 impl PrirodaSender {
@@ -269,6 +270,207 @@ fn server(sender: PrirodaSender) {
         .launch();
 }
 
+struct MessageStream {
+    stream: std::net::TcpStream,
+}
+
+impl MessageStream {
+    fn send(&mut self, msg: &[u8]) -> std::io::Result<()> {
+        use std::io::Write;
+        write!(self.stream, "{}:", msg.len())?;
+        self.stream.write_all(msg)
+    }
+
+    fn recv_raw(&mut self) -> std::io::Result<Vec<u8>> {
+        use std::io::Read;
+        let mut req_len = 0usize;
+        loop {
+            let mut buf = [0; 1];
+            if self.stream.read(&mut buf)? != 1 {
+                panic!();
+            }
+            if &buf == b":" {
+                break;
+            } else {
+                assert!(buf[0] >= b'0' && buf[0] <= b'9');
+                req_len *= 10;
+                req_len += (buf[0] - b'0') as usize;
+            }
+        }
+
+        let mut buf = vec![0; req_len];
+        self.stream.read_exact(&mut buf)?;
+        Ok(buf)
+    }
+
+    fn recv(&mut self) -> std::io::Result<RequestMessage> {
+        Ok(serde_json::from_slice(&*self.recv_raw()?).unwrap())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct RequestMessage {
+    to: String,
+    #[serde(rename = "type")]
+    type_: String,
+    #[serde(flatten)]
+    rest: std::collections::HashMap<String, serde_json::Value>,
+}
+
+fn ff_dbg_server(sender: PrirodaSender) {
+    use std::io::Write;
+    std::thread::spawn(move || {
+        let listener = std::net::TcpListener::bind("127.0.0.1:6081").unwrap();
+        println!("Listening");
+        for stream in listener.incoming() {
+            let mut stream = MessageStream {
+                stream: stream.unwrap(),
+            };
+
+            let mut server = MessageStream {
+                stream: std::net::TcpStream::connect("127.0.0.1:6080").unwrap(),
+            };
+
+            /*loop {
+                let msg = server.recv_raw().unwrap();
+                println!("<-{}", String::from_utf8_lossy(&msg));
+                stream.send(&*msg).unwrap();
+
+                let msg = stream.recv_raw().unwrap();
+                println!("->{}", String::from_utf8_lossy(&msg));
+                server.send(&*msg).unwrap();
+            }*/
+
+            println!("Accepted");
+
+            let msg = r#"{"applicationType":"browser","from":"root","testConnectionPrefix":"server1.conn9.","traits":{"bulk":true,"heapSnapshots":true,"perfActorVersion":1,"sources":true,"watchpoints":true,"webConsoleCommands":true}}"#;
+
+            stream.send(msg.as_bytes()).unwrap();
+
+            loop {
+                let msg = stream.recv().unwrap();
+                println!("{:?}", msg);
+                match &*msg.type_ {
+                    "getRoot" => {
+                        stream.send(br#"{"actorRegistryActor":"server1.conn9.actorRegistryActor2","deviceActor":"server1.conn9.deviceActor4","from":"root","heapSnapshotFileActor":"server1.conn9.heapSnapshotFileActor5","perfActor":"server1.conn9.perfActor6","preferenceActor":"server1.conn9.preferenceActor1"}"#).unwrap();
+                    }
+                    "getDescription" => {
+                        match &*msg.to {
+                            "server1.conn9.deviceActor4" => {
+                                // FIXME remove as much as possible
+                                stream.send(br#"{"from":"server1.conn9.deviceActor4","value":{"appbuildid":"20191227034945","appid":"{ec8030f7-c20a-464f-9b0e-13a3a9e97384}","apptype":"priroda","arch":"miri","brandName":"Priroda, because code has no privacy rights","canDebugServiceWorkers":false,"channel":"aurora","geckobuildid":"20191227034945","geckoversion":"72.0","isParentInterceptEnabled":false,"platformbuildid":"20191227034945","platformversion":"72.0","processor":"x86_64","profile":"ff-devtools-dbg-test","useragent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:72.0) Gecko/20100101 Firefox/72.0","vendor":"Mozilla","version":"72.0"}}"#).unwrap();
+                            }
+                            _ => println!("Unknown actor"),
+                        }
+                    }
+                    "getBoolPref" => {
+                        match &*msg.to {
+                            "server1.conn9.preferenceActor1" => {}
+                            _ => println!("Wrong actor to send getBoolPref to"),
+                        }
+                        match msg.rest["value"].as_str().unwrap() {
+                            "devtools.debugger.prompt-connection" | "browser.privatebrowsing.autostart" | "dom.serviceWorkers.enabled" => stream.send(br#"{"from":"server1.conn9.preferenceActor1","value":false}"#).unwrap(),
+                            _ => println!("Unknown pref"),
+                        }
+                    }
+                    "listAddons" => {
+                        match &*msg.to {
+                            "root" => stream.send(br#"{"addons":[],"from":"root"}"#).unwrap(),
+                            _ => println!("Wrong actor to send listAddons to"),
+                        }
+                    }
+                    "listTabs" => {
+                        stream.send(br#"{
+                            "actorRegistryActor":"server1.conn9.actorRegistryActor2",
+                            "addonsActor":"server1.conn9.addonsActor3",
+                            "deviceActor":"server1.conn9.deviceActor4",
+                            "from":"root",
+                            "heapSnapshotFileActor":"server1.conn9.heapSnapshotFileActor5",
+                            "perfActor":"server1.conn9.perfActor6",
+                            "preferenceActor":"server1.conn9.preferenceActor1",
+                            "selected":0,
+                            "tabs":[
+                                {
+                                    "accessibilityActor":"server1.conn9.child26/accessibilityActor14",
+                                    "actor":"server1.conn9.child26/frameTarget1",
+                                    "animationsActor":"server1.conn9.child26/animationsActor11",
+                                    "browsingContextID":4,
+                                    "changesActor":"server1.conn9.child26/changesActor16",
+                                    "consoleActor":"server1.conn9.child26/consoleActor2",
+                                    "cssPropertiesActor":"server1.conn9.child26/cssPropertiesActor9",
+                                    "emulationActor":"server1.conn9.child26/emulationActor12",
+                                    "favicon":null,
+                                    "framerateActor":"server1.conn9.child26/framerateActor7",
+                                    "inspectorActor":"server1.conn9.child26/inspectorActor3",
+                                    "manifestActor":"server1.conn9.child26/manifestActor18",
+                                    "memoryActor":"server1.conn9.child26/memoryActor6",
+                                    "outerWindowID":6,
+                                    "performanceActor":"server1.conn9.child26/performanceActor10",
+                                    "reflowActor":"server1.conn9.child26/reflowActor8",
+                                    "screenshotActor":"server1.conn9.child26/screenshotActor15",
+                                    "storageActor":"server1.conn9.child26/storageActor5",
+                                    "styleSheetsActor":"server1.conn9.child26/styleSheetsActor4",
+                                    "title":"Nieuw tabblad",
+                                    "traits":{"isBrowsingContext":true},
+                                    "url":"about:home",
+                                    "webExtensionInspectedWindowActor":"server1.conn9.child26/webExtensionInspectedWindowActor13",
+                                    "webSocketActor":"server1.conn9.child26/webSocketActor17"
+                                }
+                            ]
+                        }"#).unwrap();
+                    }
+                    "getTab" => {
+                        match &*msg.to {
+                            "root" => {
+                                match msg.rest["outerWindowID"].as_u64().unwrap() {
+                                    6 => {
+                                        //stream.send(br#"{"type":"frameUpdate","frames":[{"id":6,"url":"https://github.com/","title":"The world's leading software development platform | GitHub"}],"from":"server1.conn39.child26/frameTarget1"}"#).unwrap();
+                                        stream.send(br#"{"tab":{"actor":"server1.conn39.child26/frameTarget1","browsingContextID":4,"traits":{"isBrowsingContext":true},"title":"The world's leading software development platform | GitHub","url":"https://github.com/","outerWindowID":6,"consoleActor":"server1.conn39.child26/consoleActor2","inspectorActor":"server1.conn39.child26/inspectorActor3","styleSheetsActor":"server1.conn39.child26/styleSheetsActor4","storageActor":"server1.conn39.child26/storageActor5","memoryActor":"server1.conn39.child26/memoryActor6","framerateActor":"server1.conn39.child26/framerateActor7","reflowActor":"server1.conn39.child26/reflowActor8","cssPropertiesActor":"server1.conn39.child26/cssPropertiesActor9","performanceActor":"server1.conn39.child26/performanceActor10","animationsActor":"server1.conn39.child26/animationsActor11","emulationActor":"server1.conn39.child26/emulationActor12","webExtensionInspectedWindowActor":"server1.conn39.child26/webExtensionInspectedWindowActor13","accessibilityActor":"server1.conn39.child26/accessibilityActor14","screenshotActor":"server1.conn39.child26/screenshotActor15","changesActor":"server1.conn39.child26/changesActor16","webSocketActor":"server1.conn39.child26/webSocketActor17","manifestActor":"server1.conn39.child26/manifestActor18"},"from":"root"}"#).unwrap();
+                                    }
+                                    _ => println!("Unknown outerWindowID")
+                                }
+                            }
+                            _ => println!("Wrong actor to send getTab to"),
+                        }
+                    }
+                    "getProcess" => {
+                        match &*msg.to {
+                            "root" => {
+                                match msg.rest["id"].as_u64().unwrap() {
+                                    0 => stream.send(br#"{"form":{"actor":"server1.conn9.processDescriptor28","id":0,"isParent":true},"from":"root"}"#).unwrap(),
+                                    _ => println!("Unknown process id"),
+                                }
+                            }
+                            _ => println!("Wrong actor to send listProcess to"),
+                        }
+                    }
+                    "listProcesses" => {
+                        match &*msg.to {
+                            "root" => {
+                                stream.send(br#"{"from":"root","processes":[{"actor":"server1.conn9.processDescriptor28","id":0,"isParent":true}]}"#).unwrap();
+                            }
+                            _ => println!("Wrong actor to send listProcess to"),
+                        }
+                    }
+                    "listWorkers" => {
+                        stream.send(br#"{"from":"root","workers":[]}"#).unwrap();
+                    }
+                    "listServiceWorkerRegistrations" => {
+                        stream.send(br#"{"from":"root","registrations":[]}"#).unwrap();
+                    }
+                    _ => println!("Unknown message"),
+                }
+            }
+
+            // recv 30:{"type":"getRoot","to":"root"}
+            // send 311:{"preferenceActor":"server1.conn2.preferenceActor1","actorRegistryActor":"server1.conn2.actorRegistryActor2","addonsActor":"server1.conn2.addonsActor3","deviceActor":"server1.conn2.deviceActor4","heapSnapshotFileActor":"server1.conn2.heapSnapshotFileActor5","perfActor":"server1.conn2.perfActor6","from":"root"}
+
+            // send 59:{"to":"server1.conn2.deviceActor4","type":"getDescription"}
+            // send 824:{"value":{"appid":"{ec8030f7-c20a-464f-9b0e-13a3a9e97384}","apptype":"firefox","vendor":"Mozilla","name":"Firefox","version":"72.0","appbuildid":"20191227034945","platformbuildid":"20191227034945","geckobuildid":"20191227034945","platformversion":"72.0","geckoversion":"72.0","locale":"nl","endianness":"LE","hostname":"iMac","os":"Darwin","platform":"Darwin","hardware":"unknown","deviceName":null,"arch":"x86_64","processor":"x86_64","compiler":"gcc3","profile":"ff-devtools-dbg-test","channel":"aurora","dpi":109,"useragent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:72.0) Gecko/20100101 Firefox/72.0","width":2560,"height":1440,"physicalWidth":2560,"physicalHeight":1440,"brandName":"Firefox Developer Edition","canDebugServiceWorkers":false,"isParentInterceptEnabled":false},"from":"server1.conn5.deviceActor4"}
+        }
+    });
+}
+
 // Copied from miri/bin/miri.rs
 fn find_sysroot() -> String {
     if let Ok(sysroot) = std::env::var("MIRI_SYSROOT") {
@@ -298,7 +500,7 @@ fn main() {
 
     // setup http server and similar
     let (sender, receiver) = std::sync::mpsc::channel();
-    let sender = PrirodaSender(Mutex::new(sender));
+    let sender = PrirodaSender(Arc::new(Mutex::new(sender)));
     let step_count = Arc::new(Mutex::new(0));
     let config = Arc::new(Mutex::new(Config::default()));
 
@@ -394,6 +596,7 @@ fn main() {
         }
         println!("\n============== Miri crashed too often. Aborting ==============\n");
     });
+    ff_dbg_server(sender.clone());
     server(sender);
     handle.join().unwrap();
 }
