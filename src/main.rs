@@ -447,7 +447,8 @@ fn ff_dbg_server(sender: PrirodaSender) {
                     "listProcesses" => {
                         match &*msg.to {
                             "root" => {
-                                stream.send(br#"{"from":"root","processes":[{"actor":"server1.conn9.processDescriptor28","id":0,"isParent":true}]}"#).unwrap();
+                                stream.send(br#"{"from":"root","processes":[]}"#).unwrap();
+                                //stream.send(br#"{"from":"root","processes":[{"actor":"server1.conn9.processDescriptor28","id":0,"isParent":true}]}"#).unwrap();
                             }
                             _ => println!("Wrong actor to send listProcess to"),
                         }
@@ -464,6 +465,14 @@ fn ff_dbg_server(sender: PrirodaSender) {
                                 stream.send(br#"{"type":"tabAttached","threadActor":"server1.conn39.thread53","cacheDisabled":false,"javascriptEnabled":true,traits:{},"from":"server1.conn39.child26/frameTarget1"}"#).unwrap();
                             }
                             _ => println!("Unknown actor"),
+                        }
+                    }
+                    "getTarget" => {
+                        match &*msg.to {
+                            "server1.conn9.processDescriptor28" => {
+                                stream.send(br#"{"from":"server1.conn9.processDescriptor28","process":{"actor":"server1.conn9.parentTarget32","traits":{"isBrowsingContext":true},"url":"chrome://browser/content/browser.xhtml","outerWindowId":1,"consoleActor":"server1.conn2.consoleActor36"}}"#).unwrap();
+                            }
+                            _ => println!("Wrong actor to send getTarget to"),
                         }
                     }
                     _ => println!("Unknown message"),
