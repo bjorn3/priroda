@@ -475,6 +475,9 @@ fn ff_dbg_server(sender: PrirodaSender) {
                             _ => println!("Wrong actor to send getTarget to"),
                         }
                     }
+                    "startListeners" => {
+                        stream.send(format!(r#"{{"type":"startedListeners":[],"nativeConsoleAPI":true,"traits":{{}},"from":"{}"}}"#, msg.to).as_bytes()).unwrap();
+                    }
                     _ => println!("Unknown message"),
                 }
             }
