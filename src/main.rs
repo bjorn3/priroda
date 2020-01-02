@@ -327,11 +327,11 @@ fn ff_dbg_server(sender: PrirodaSender) {
                 stream: stream.unwrap(),
             };
 
-            let mut server = MessageStream {
+            /*let mut server = MessageStream {
                 stream: std::net::TcpStream::connect("127.0.0.1:6080").unwrap(),
             };
 
-            /*loop {
+            loop {
                 let msg = server.recv_raw().unwrap();
                 println!("<-{}", String::from_utf8_lossy(&msg));
                 stream.send(&*msg).unwrap();
@@ -457,6 +457,14 @@ fn ff_dbg_server(sender: PrirodaSender) {
                     }
                     "listServiceWorkerRegistrations" => {
                         stream.send(br#"{"from":"root","registrations":[]}"#).unwrap();
+                    }
+                    "attach" => {
+                        match &*msg.to {
+                            "server1.conn39.child26/frameTarget1" => {
+                                stream.send(br#"{"type":"tabAttached","threadActor":"server1.conn39.thread53","cacheDisabled":false,"javascriptEnabled":true,traits:{},"from":"server1.conn39.child26/frameTarget1"}"#).unwrap();
+                            }
+                            _ => println!("Unknown actor"),
+                        }
                     }
                     _ => println!("Unknown message"),
                 }
